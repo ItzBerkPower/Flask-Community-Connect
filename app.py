@@ -130,7 +130,7 @@ def init_db():
 # Default route
 @app.route("/")
 def index():
-    return "Hi"
+    return render_template('index.html') # Render the homepage template
 
 
 # Route to register the user
