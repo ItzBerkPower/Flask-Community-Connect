@@ -1,8 +1,8 @@
 # app.py
 import sqlite3
 import os
-from flask import Flask, g, jsonify
-from werkzeug.security import generate_password_hash
+from flask import Flask, render_template, request, redirect, url_for, flash, session
+from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
 # DATABASE = 'database.db', kept creating it in outer file if you run the code in outer directory
@@ -125,12 +125,79 @@ def init_db():
 
 
 
+# ROUTES ---------------------
+
 # Default route
 @app.route("/")
-def home():
+def index():
     return "Hi"
 
-# Needed to run
+
+# Route to register the user
+@app.route("/register", methods = ["GET", "POST"])
+def register():
+    if request.method == "POST":
+        email = request.form["email"]
+        password = generate_password_hash(request.form["password"])
+        role = request.form["role"]
+
+        # Initialise the cursor
+        conn = get_db()
+        cursor = conn.cursor()
+
+        try:
+            # Try inserting the user into database
+            cursor.execute('INSERT INTO user (email, password_hash, role) VALUES (?, ?, ?)', 
+                        (email, password, role))
+        
+            conn.commit()
+            flash('Registration successful! You can now log in.', 'success') # Successful login -> Print login message
+            return redirect(url_for('index')) # Send user back to home page
+        
+
+        # If error, caused by email already being registered (Unique constraint), send warning message instead of crashing program
+        except sqlite3.IntegrityError:
+            flash("An account with that username or email already exists.", 'danger')
+            conn.rollback()
+        
+        # Close the cursor object
+        finally:
+            conn.close()
+
+    return render_template('register.html') # Render the template
+        
+
+
+# Route for user to log in
+@app.route('/login', methods = ['GET', 'POST'])
+def login():
+    # Gather email and password from form after submission
+    if request.method == 'POST': 
+        email = request.form['email']
+        password = request.form['password']
+
+        # Try to find user from database
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM user WHERE email = ?', (email,))
+            user = cursor.fetchone()
+
+        # If the user row is correct, and the password is correct, update the session to log user in
+        if user and check_password_hash(user['password_hash'], password):
+            session['user_id'] = user['user_id']
+            session["role"] = user["role"]
+
+            return redirect(url_for('index')) # Sends user back to home page
+        
+        # If wrong details
+        else:
+            flash('Invalid email or password. Please try again.', 'danger') # Can't find user, send warning message
+    
+    return render_template('login.html') # Render template
+
+
+
+# Checks if script is run directly (Not imported)
 if __name__ == "__main__":
-    init_db()
-    app.run(debug=True)
+    init_db() # Initialise databse
+    app.run(debug=True) # Runs the Flask application with debug mode enabled
