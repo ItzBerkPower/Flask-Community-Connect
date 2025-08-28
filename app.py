@@ -4,6 +4,7 @@ import os
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
+import re
 
 # DATABASE = 'database.db', kept creating it in outer file if you run the code in outer directory
 base_dir = os.path.abspath(os.path.dirname(__file__)) # So defines the directory
@@ -184,6 +185,7 @@ def login():
 
         # If the user row is correct, and the password is correct, update the session to log user in
         if user and check_password_hash(user['password_hash'], password):
+            session['loggedin'] = True
             session['user_id'] = user['user_id']
             session["role"] = user["role"]
 
@@ -195,6 +197,31 @@ def login():
     
     return render_template('login.html') # Render template
 
+
+# Route for user to logout
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash('You have been logged out.', 'info')
+
+    return redirect(url_for('index'))
+
+
+# Route for user to see all organisations
+@app.route('/volunteers')
+def volunteers():
+    if 'loggedin' in session and session.get('role') == 'volunteer':
+        # Try to find user from database
+        with get_db() as conn:
+            cursor = conn.cursor()
+        cursor.execute('SELECT email, role FROM user WHERE role="volunteer"')
+        volunteers_list = cursor.fetchall()
+
+        return render_template('volunteers.html', volunteers=volunteers_list)
+    
+    else:
+        flash('You must be logged in as a volunteer to view this page.', 'danger')
+        return redirect(url_for('login'))
 
 
 # Checks if script is run directly (Not imported)

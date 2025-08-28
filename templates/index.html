@@ -1,12 +1,22 @@
-<h1>Welcome</h1>
-{% if session.user_id %}
-  <p>You are logged in as {{ session.role }}</p>
-  <a href="/logout">Logout</a>
-  <ul>
-    <li><a href="/add-volunteer">Add Volunteer</a></li>
-    <li><a href="/organisations">View Organisations</a></li>
-    <li><a href="/update-phone">Update Phone</a></li>
-  </ul>
-{% else %}
-  <a href="/login">Login</a> | <a href="/register">Register</a>
-{% endif %}
+{% extends "layout.html" %}
+{% block title %}Home | Community Connect{% endblock %}
+
+{% block content %}
+<div class="bubble-container">
+    <div class="bubble text-center">
+        <h1 class="mb-4">Welcome to Community Connect</h1>
+        <p class="lead">
+            Our mission is to streamline the connection between volunteers and organisations.  
+            Whether you are an individual looking to contribute your skills, or an organisation searching for passionate volunteers,  
+            Community Connect is here to make collaboration effortless.  
+        </p>
+        <p>
+            Browse upcoming events, register your organisation, or build your volunteer profile today.  
+        </p>
+        <div class="mt-4">
+            <a href="{{ url_for('register') }}" class="btn btn-custom me-2">Join Now</a>
+            <a href="{{ url_for('login') }}" class="btn btn-custom">Login</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

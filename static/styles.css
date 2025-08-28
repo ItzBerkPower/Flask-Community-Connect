@@ -1,0 +1,42 @@
+/* Gradient Background */
+body {
+    background: linear-gradient(135deg, #1e3c72, #2a5298, #38ef7d);
+    min-height: 100vh;
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Auth Pages */
+.auth-page, .homepage {
+    min-height: calc(100vh - 56px); /* full minus navbar */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+/* White Bubble Card */
+.auth-card, .welcome-box {
+    background-color: white;
+    border-radius: 15px;
+    box-shadow: 0 5px 25px rgba(0,0,0,0.2);
+    max-width: 600px;
+    width: 100%;
+}
+
+/* Form Inputs */
+.form-control-lg {
+    font-size: 1.2em;
+    padding: 12px;
+}
+
+/* Buttons */
+.btn-light {
+    background-color: #e0f7fa;
+    color: black;
+    border: none;
+    font-weight: bold;
+}
+.btn-light:hover {
+    background-color: #b2ebf2;
+}

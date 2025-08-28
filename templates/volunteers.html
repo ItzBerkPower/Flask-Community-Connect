@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block title %}All Volunteers | Community Connect{% endblock %}
+
+{% block content %}
+<style>
+    body {
+        background: linear-gradient(135deg, #ff4e50, #1fab89);
+        min-height: 100vh;
+    }
+</style>
+
+<div class="bubble-container">
+    <div class="bubble">
+        <h2 class="text-center mb-4">All Volunteers</h2>
+        <ul class="list-group">
+            {% for v in volunteers %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    {{ v.email }}
+                    <span class="badge bg-success">{{ v.role|capitalize }}</span>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endblock %}

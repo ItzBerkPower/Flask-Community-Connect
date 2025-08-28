@@ -1,11 +1,26 @@
-<h2>Register</h2>
-<form method="post">
-  Email: <input type="email" name="email"><br>
-  Password: <input type="password" name="password"><br>
-  Role: 
-  <select name="role">
-    <option value="volunteer">Volunteer</option>
-    <option value="organisation">Organisation</option>
-  </select><br>
-  <button type="submit">Register</button>
-</form>
+{% extends "layout.html" %}
+{% block title %}Sign Up | Community Connect{% endblock %}
+
+{% block content %}
+<div class="bubble-container">
+    <div class="bubble">
+        <h2 class="text-center mb-4">Create Your Account</h2>
+        <form method="POST">
+            <div class="mb-3">
+                <input type="email" class="form-control" name="email" placeholder="Email Address" required>
+            </div>
+            <div class="mb-3">
+                <input type="password" class="form-control" name="password" placeholder="Password" required>
+            </div>
+            <div class="mb-3">
+                <select name="role" class="form-control" required>
+                    <option value="" disabled selected>Select Role</option>
+                    <option value="volunteer">Volunteer</option>
+                    <option value="organisation">Organisation</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-custom w-100">Sign Up</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
