@@ -138,7 +138,6 @@ def index():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username']
         email = request.form['email']
         password = generate_password_hash(request.form['password'])
         role = request.form['role']
@@ -239,30 +238,76 @@ def all_organisations():
 
 
 # My Account (update details)
-@app.route("/myaccount", methods=["GET", "POST"])
+@app.route('/my_account', methods=['GET', 'POST'])
 def my_account():
-    if not session.get("user_id"):
-        return redirect(url_for("login"))
 
-    with get_db() as conn:
-        cursor = conn.cursor()
+    # Redirect if not logged in
+    if 'user_id' not in session:
+        flash("You need to log in first.", "warning")
+        return redirect(url_for('login'))
+    
+    conn = get_db()
+    cursor = conn.cursor()
 
-        if request.method == "POST":
-            new_email = request.form.get("email")
-            new_phone = request.form.get("phone_number")
-            cursor.execute(
-                "UPDATE user SET email=?, phone_number=? WHERE user_id=?",
-                (new_email, new_phone, session["user_id"])
-            )
-            conn.commit()
-            flash("Account updated successfully!", "success")
-            return redirect(url_for("my_account"))
+    # Get current user info
+    cursor.execute("SELECT * FROM user WHERE user_id = ?", (session['user_id'],))
+    user = cursor.fetchone()
 
-        user = cursor.execute(
-            "SELECT * FROM user WHERE user_id=?", (session["user_id"],)
-        ).fetchone()
+    volunteer = organisation = None
+    if user['role'] == "volunteer":
+        cursor.execute("SELECT * FROM volunteer WHERE user_id = ?", (user['user_id'],))
+        volunteer = cursor.fetchone()
+    elif user['role'] == "organisation":
+        cursor.execute("SELECT * FROM organisation WHERE user_id = ?", (user['user_id'],))
+        organisation = cursor.fetchone()
 
-    return render_template("myaccount.html", user=user)
+    if request.method == "POST":
+        email = request.form['email']
+        phone_number = request.form['phone_number']
+        new_password = request.form['password']
+
+        # Update shared user info
+        if new_password:
+            password_hash = generate_password_hash(new_password)
+            cursor.execute("UPDATE user SET email = ?, phone_number = ?, password_hash = ? WHERE user_id = ?",
+                           (email, phone_number, password_hash, user['user_id']))
+        else:
+            cursor.execute("UPDATE user SET email = ?, phone_number = ? WHERE user_id = ?",
+                           (email, phone_number, user['user_id']))
+
+        # Update volunteer-specific info
+        if user['role'] == "volunteer":
+            first_name = request.form['first_name']
+            last_name = request.form['last_name']
+            availability = request.form['availability']
+            cursor.execute("""UPDATE volunteer 
+                              SET first_name = ?, 
+                                  last_name = ?, 
+                                  availability = ?
+                              WHERE user_id = ?""",
+                           (first_name, last_name, availability, user['user_id']))
+
+        # Update organisation-specific info
+        elif user['role'] == "organisation":
+            name = request.form['organisation_name']
+            address = request.form['organisation_address']
+            website = request.form['organisation_website']
+            description = request.form['organisation_description']
+            cursor.execute("""UPDATE organisation 
+                              SET name = ?, 
+                                  address = ?, 
+                                  website = ?, 
+                                  description = ?
+                              WHERE user_id = ?""",
+                           (name, address, website, description, user['user_id']))
+
+        conn.commit()
+        flash("Account updated successfully!", "success")
+        return redirect(url_for('my_account'))
+
+    conn.close()
+    return render_template("my_account.html", user=user, volunteer=volunteer, organisation=organisation)
+
 
 
 # Checks if script is run directly (Not imported)
