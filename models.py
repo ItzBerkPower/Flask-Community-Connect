@@ -118,7 +118,7 @@ def init_db():
         );
         ''')
 
-    # Add skills into skill table
+    # Add skills into skill table, 'INSERT OR IGNORE' is like 'CREATE IF NOT EXISTS'
     cursor.executemany('''
     INSERT OR IGNORE INTO skill (name, description) VALUES (?, ?)
     ''', [
