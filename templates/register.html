@@ -4,23 +4,63 @@
 {% block content %}
 <div class="bubble-container">
     <div class="bubble">
-        <h2 class="text-center mb-4">Create Your Account</h2>
+        <h2 class="text-center mb-4">Create an Account</h2>
+
         <form method="POST">
+            <!-- Role selection -->
+            <div class="mb-3">
+                <label for="role" class="form-label">Sign Up As</label>
+                <select class="form-select" id="role" name="role" required onchange="toggleFields()">
+                    <option value="">-- Select Role --</option>
+                    <option value="volunteer">Volunteer</option>
+                    <option value="organisation">Organisation</option>
+                </select>
+            </div>
+
+            <!-- Shared fields -->
+            <div class="mb-3">
+                <input type="text" class="form-control" name="username" placeholder="Username" required>
+            </div>
             <div class="mb-3">
                 <input type="email" class="form-control" name="email" placeholder="Email Address" required>
             </div>
             <div class="mb-3">
                 <input type="password" class="form-control" name="password" placeholder="Password" required>
             </div>
-            <div class="mb-3">
-                <select name="role" class="form-control" required>
-                    <option value="" disabled selected>Select Role</option>
-                    <option value="volunteer">Volunteer</option>
-                    <option value="organisation">Organisation</option>
-                </select>
+
+            <!-- Volunteer fields -->
+            <div id="volunteer-fields" style="display:none;">
+                <div class="mb-3">
+                    <input type="text" class="form-control" name="first_name" placeholder="First Name">
+                </div>
+                <div class="mb-3">
+                    <input type="text" class="form-control" name="last_name" placeholder="Last Name">
+                </div>
             </div>
+
+            <!-- Organisation fields -->
+            <div id="organisation-fields" style="display:none;">
+                <div class="mb-3">
+                    <input type="text" class="form-control" name="organisation_name" placeholder="Organisation Name">
+                </div>
+                <div class="mb-3">
+                    <textarea class="form-control" name="organisation_description" placeholder="Organisation Description"></textarea>
+                </div>
+                <div class="mb-3">
+                    <input type="text" class="form-control" name="organisation_address" placeholder="Organisation Address">
+                </div>
+            </div>
+
             <button type="submit" class="btn btn-custom w-100">Sign Up</button>
         </form>
     </div>
 </div>
+
+<script>
+function toggleFields() {
+    const role = document.getElementById("role").value;
+    document.getElementById("volunteer-fields").style.display = (role === "volunteer") ? "block" : "none";
+    document.getElementById("organisation-fields").style.display = (role === "organisation") ? "block" : "none";
+}
+</script>
 {% endblock %}

@@ -135,37 +135,42 @@ def index():
 
 
 # Route to register the user
-@app.route("/register", methods = ["GET", "POST"])
+@app.route('/register', methods=['GET', 'POST'])
 def register():
-    if request.method == "POST":
-        email = request.form["email"]
-        password = generate_password_hash(request.form["password"])
-        role = request.form["role"]
+    if request.method == 'POST':
+        username = request.form['username']
+        email = request.form['email']
+        password = generate_password_hash(request.form['password'])
+        role = request.form['role']
 
-        # Initialise the cursor
         conn = get_db()
         cursor = conn.cursor()
 
-        try:
-            # Try inserting the user into database
-            cursor.execute('INSERT INTO user (email, password_hash, role) VALUES (?, ?, ?)', 
-                        (email, password, role))
-        
-            conn.commit()
-            flash('Registration successful! You can now log in.', 'success') # Successful login -> Print login message
-            return redirect(url_for('index')) # Send user back to home page
-        
+        # Insert into user table
+        cursor.execute("INSERT INTO user (email, password_hash, role) VALUES (?, ?, ?)",
+                       (email, password, role))
+        user_id = cursor.lastrowid
 
-        # If error, caused by email already being registered (Unique constraint), send warning message instead of crashing program
-        except sqlite3.IntegrityError:
-            flash("An account with that username or email already exists.", 'danger')
-            conn.rollback()
-        
-        # Close the cursor object
-        finally:
-            conn.close()
+        if role == "volunteer":
+            first_name = request.form['first_name']
+            last_name = request.form['last_name']
+            cursor.execute("INSERT INTO volunteer (user_id, first_name, last_name) VALUES (?, ?, ?)",
+                           (user_id, first_name, last_name))
 
-    return render_template('register.html') # Render the template
+        elif role == "organisation":
+            org_name = request.form['organisation_name']
+            org_desc = request.form['organisation_description']
+            org_addr = request.form['organisation_address']
+            cursor.execute("INSERT INTO organisation (user_id, name, description, address) VALUES (?, ?, ?, ?)",
+                           (user_id, org_name, org_desc, org_addr))
+
+        conn.commit()
+        conn.close()
+        flash('Registration successful! Please log in.', 'success')
+        return redirect(url_for('login'))
+
+    return render_template('register.html')
+
         
 
 
