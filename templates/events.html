@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{% block title %}Events | Community Connect{% endblock %}
+
+{% block content %}
+<div class="bubble-container">
+  <div class="bubble">
+    <h2 class="text-center mb-4">All Events</h2>
+
+    {% if role == "organisation" %}
+      <div class="text-end mb-3">
+        <a href="{{ url_for('create_event') }}" class="btn btn-success">+ Create Event</a>
+      </div>
+    {% endif %}
+
+    <ul class="list-group">
+      {% for e in events %}
+        <li class="list-group-item">
+          <strong>{{ e.title }}</strong> (by {{ e.name }})<br>
+          <small>{{ e.event_date }} | {{ e.location }}</small><br>
+          <span>{{ e.description }}</span><br>
+          {% if e.skills %}
+            <span class="badge bg-info">Skills: {{ e.skills|join(", ") }}</span>
+          {% endif %}
+        </li>
+      {% else %}
+        <li class="list-group-item">No events available yet.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endblock %}

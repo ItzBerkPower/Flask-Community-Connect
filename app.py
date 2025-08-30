@@ -121,8 +121,18 @@ def init_db():
         );
         ''')
 
-        conn.commit()
-        #conn.close(), don't need as in 'with' command, which is pythonic way of automatically closing website
+    # Add skills into skill table
+    cursor.executemany('''
+    INSERT OR IGNORE INTO skill (name, description) VALUES (?, ?)
+    ''', [
+        ("Endurance", "Ability to sustain effort for long periods"),
+        ("Listening", "Good at understanding and following others"),
+        ("Talkative", "Engages easily in conversation"),
+        ("Public Speaking", "Confident in speaking to groups")
+    ])
+
+    conn.commit()
+    #conn.close(), don't need as in 'with' command, which is pythonic way of automatically closing website
 
 
 
@@ -296,7 +306,7 @@ def my_account():
             cursor.execute("""UPDATE organisation 
                               SET name = ?, 
                                   address = ?, 
-                                  website = ?, 
+                                  website_url = ?, 
                                   description = ?
                               WHERE user_id = ?""",
                            (name, address, website, description, user['user_id']))
@@ -307,6 +317,82 @@ def my_account():
 
     conn.close()
     return render_template("my_account.html", user=user, volunteer=volunteer, organisation=organisation)
+
+# Route to create events
+@app.route("/create_event", methods=["GET", "POST"])
+def create_event():
+    if 'user_id' not in session or session.get('role') != 'organisation':
+        flash("Only organisations can create events.", "danger")
+        return redirect(url_for('events'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Always fetch available skills for form
+    cursor.execute("SELECT * FROM skill")
+    skills = cursor.fetchall()
+
+    if request.method == "POST":
+        title = request.form['title']
+        description = request.form['description']
+        event_date = request.form['event_date']
+        location = request.form['location']
+        max_volunteers = request.form['max_volunteers']
+        selected_skills = request.form.getlist('skills')
+
+        # Get organisation_id for current user
+        cursor.execute("SELECT organisation_id FROM organisation WHERE user_id = ?", (session['user_id'],))
+        org = cursor.fetchone()
+
+        # Insert event
+        cursor.execute('''INSERT INTO event (organisation_id, title, description, event_date, location, max_volunteers)
+                          VALUES (?, ?, ?, ?, ?, ?)''',
+                          (org['organisation_id'], title, description, event_date, location, max_volunteers))
+        event_id = cursor.lastrowid
+
+        # Insert selected skills into junction
+        for skill_id in selected_skills[:3]:  # limit to 3 skills
+            cursor.execute("INSERT INTO event_skill (event_id, skill_id) VALUES (?, ?)", (event_id, skill_id))
+
+        conn.commit()
+        conn.close()
+
+        flash("Event created successfully!", "success")
+        return redirect(url_for('events'))
+
+    conn.close()
+    return render_template("create_event.html", skills=skills)
+
+
+
+# Route for events
+@app.route("/events")
+def events():
+    if 'user_id' not in session:
+        flash("You must be logged in to view events.", "warning")
+        return redirect(url_for('login'))
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Fetch events with their org names
+    cursor.execute('''SELECT e.*, o.name 
+                      FROM event e
+                      JOIN organisation o ON e.organisation_id = o.organisation_id''')
+    events = cursor.fetchall()
+
+    # For each event, get its skills
+    event_data = []
+    for e in events:
+        cursor.execute('''SELECT s.name 
+                          FROM event_skill es 
+                          JOIN skill s ON es.skill_id = s.skill_id 
+                          WHERE es.event_id = ?''', (e['event_id'],))
+        skills = [row['name'] for row in cursor.fetchall()]
+        event_data.append({**dict(e), "skills": skills})
+
+    conn.close()
+    return render_template("events.html", events=event_data, role=session.get('role'))
 
 
 

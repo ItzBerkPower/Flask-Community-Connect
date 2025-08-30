@@ -62,11 +62,15 @@
             <li class="nav-item"><a class="nav-link" href="{{ url_for('register') }}">Sign Up</a></li>
             <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
             {% else %}
+            <!-- NEW: All Events shows for any logged-in user -->
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('events') }}">All Events</a></li>
+
             {% if session.get('role') == 'organisation' %}
                 <li class="nav-item"><a class="nav-link" href="{{ url_for('all_volunteers') }}">All Volunteers</a></li>
             {% elif session.get('role') == 'volunteer' %}
                 <li class="nav-item"><a class="nav-link" href="{{ url_for('all_organisations') }}">All Organisations</a></li>
             {% endif %}
+
             <li class="nav-item"><a class="nav-link" href="{{ url_for('my_account') }}">My Account</a></li>
             <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">Logout</a></li>
             {% endif %}
@@ -74,6 +78,7 @@
         </div>
     </div>
     </nav>
+
 
     {% block content %}{% endblock %}
 </body>

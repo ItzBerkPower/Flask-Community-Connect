@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% block title %}Create Event | Community Connect{% endblock %}
+
+{% block content %}
+<div class="bubble-container">
+  <div class="bubble">
+    <h2 class="text-center mb-4">Create Event</h2>
+    <form method="POST">
+      <div class="mb-3">
+        <label>Title</label>
+        <input type="text" name="title" class="form-control" required>
+      </div>
+      <div class="mb-3">
+        <label>Description</label>
+        <textarea name="description" class="form-control" required></textarea>
+      </div>
+      <div class="mb-3">
+        <label>Date</label>
+        <input type="date" name="event_date" class="form-control" required>
+      </div>
+      <div class="mb-3">
+        <label>Location</label>
+        <input type="text" name="location" class="form-control" required>
+      </div>
+      <div class="mb-3">
+        <label>Max Volunteers</label>
+        <input type="number" name="max_volunteers" class="form-control" min="1" required>
+      </div>
+      <div class="mb-3">
+        <label>Skills (pick up to 3)</label><br>
+        <select name="skills" class="form-select" multiple size="4">
+          {% for s in skills %}
+            <option value="{{ s.skill_id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+        <small class="text-muted">Hold CTRL (or CMD on Mac) to select multiple</small>
+      </div>
+      <button type="submit" class="btn btn-success w-100">Create Event</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
