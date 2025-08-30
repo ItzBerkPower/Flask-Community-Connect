@@ -207,21 +207,57 @@ def logout():
     return redirect(url_for('index'))
 
 
-# Route for user to see all organisations
-@app.route('/volunteers')
-def volunteers():
-    if 'loggedin' in session and session.get('role') == 'volunteer':
-        # Try to find user from database
-        with get_db() as conn:
-            cursor = conn.cursor()
-        cursor.execute('SELECT email, role FROM user WHERE role="volunteer"')
-        volunteers_list = cursor.fetchall()
-
-        return render_template('volunteers.html', volunteers=volunteers_list)
+# Route to show all volunteers (Only in view of organisation)
+@app.route("/volunteers")
+def all_volunteers():
+    if session.get("role") != "organisation":
+        flash("Access denied.")
+        return redirect(url_for("index"))
     
-    else:
-        flash('You must be logged in as a volunteer to view this page.', 'danger')
-        return redirect(url_for('login'))
+    with get_db() as conn:
+        volunteers = conn.execute("SELECT * FROM user WHERE role='volunteer'").fetchall()
+    
+    return render_template("volunteers.html", volunteers=volunteers)
+
+# Route to show all organisations (Only in view of volunteers)
+@app.route("/organisations")
+def all_organisations():
+    if session.get("role") != "volunteer":
+        flash("Access denied.")
+        return redirect(url_for("index"))
+    
+    with get_db() as conn:
+        organisations = conn.execute("SELECT * FROM user WHERE role='organisation'").fetchall()
+
+    return render_template("organisations.html", organisations=organisations)
+
+
+
+# My Account (update details)
+@app.route("/myaccount", methods=["GET", "POST"])
+def my_account():
+    if not session.get("user_id"):
+        return redirect(url_for("login"))
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        if request.method == "POST":
+            new_email = request.form.get("email")
+            new_phone = request.form.get("phone_number")
+            cursor.execute(
+                "UPDATE user SET email=?, phone_number=? WHERE user_id=?",
+                (new_email, new_phone, session["user_id"])
+            )
+            conn.commit()
+            flash("Account updated successfully!", "success")
+            return redirect(url_for("my_account"))
+
+        user = cursor.execute(
+            "SELECT * FROM user WHERE user_id=?", (session["user_id"],)
+        ).fetchone()
+
+    return render_template("myaccount.html", user=user)
 
 
 # Checks if script is run directly (Not imported)

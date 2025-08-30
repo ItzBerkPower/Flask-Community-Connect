@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+{% block title %}My Account{% endblock %}
+
+{% block content %}
+<div class="bubble-container">
+  <div class="bubble">
+    <h2>My Account</h2>
+    <form method="POST">
+      <div class="mb-3">
+        <label>Email</label>
+        <input type="email" name="email" class="form-control" value="{{ user.email }}" required>
+      </div>
+      <div class="mb-3">
+        <label>Phone Number</label>
+        <input type="text" name="phone_number" class="form-control" value="{{ user.phone_number or '' }}">
+      </div>
+      <button type="submit" class="btn btn-custom">Update</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
