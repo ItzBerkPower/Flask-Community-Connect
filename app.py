@@ -376,7 +376,7 @@ def events():
     cursor = conn.cursor()
 
     # Fetch events with their org names
-    cursor.execute('''SELECT e.*, o.name 
+    cursor.execute('''SELECT e.*, o.name, o.user_id
                       FROM event e
                       JOIN organisation o ON e.organisation_id = o.organisation_id''')
     events = cursor.fetchall()
@@ -394,6 +394,35 @@ def events():
     conn.close()
     return render_template("events.html", events=event_data, role=session.get('role'))
 
+
+# Route to delete events
+@app.route('/delete_event/<int:event_id>', methods=['POST'])
+def delete_event(event_id):
+    if 'user_id' not in session or session.get('role') != 'organisation':
+        flash('You are not allowed to do that.', 'danger')
+        return redirect(url_for('events'))
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        # Make sure the logged-in organisation owns this event
+        cursor.execute('SELECT organisation_id FROM event WHERE event_id = ?', (event_id,))
+        event = cursor.fetchone()
+
+        if event:
+            # Get organisation_id of logged in user
+            cursor.execute('SELECT organisation_id FROM organisation WHERE user_id = ?', (session['user_id'],))
+            org = cursor.fetchone()
+
+            if org and org['organisation_id'] == event['organisation_id']:
+                cursor.execute('DELETE FROM event WHERE event_id = ?', (event_id,))
+                conn.commit()
+                flash('Event deleted successfully.', 'success')
+            else:
+                flash('You can only delete your own events.', 'danger')
+        else:
+            flash('Event not found.', 'danger')
+
+    return redirect(url_for('events'))
 
 
 # Checks if script is run directly (Not imported)

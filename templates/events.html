@@ -19,7 +19,13 @@
           <small>{{ e.event_date }} | {{ e.location }}</small><br>
           <span>{{ e.description }}</span><br>
           {% if e.skills %}
-            <span class="badge bg-info">Skills: {{ e.skills|join(", ") }}</span>
+            <span class="badge bg-info">Skills: {{ e.skills }}</span>
+            {% endif %}
+
+          {% if session.get('role') == 'organisation' and session.get('user_id') == e.user_id %}
+          <form method="POST" action="{{ url_for('delete_event', event_id=e.event_id) }}" style="margin:0;">
+              <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+          </form>
           {% endif %}
         </li>
       {% else %}
