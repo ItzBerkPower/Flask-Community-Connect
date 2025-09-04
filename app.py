@@ -1,7 +1,7 @@
 # TO-DO
-# Add a DOB to table, and to form
-# Manage event for organisation, can delete people and stuff, can see evryone signed up (Show as full name with age)
-# Can see total number of people each event per event box, and show average duration of events at top
+# Add full list of volunteers per event, with total number of volunteers and age of volunteers
+# Can see total number of people each event per event box (Show as fraction), and show average duration of events at top
+# Fix commenting and code style
 
 
 
