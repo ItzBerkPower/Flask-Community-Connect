@@ -18,6 +18,7 @@
           <strong>{{ e.title }}</strong> (by {{ e.name }})<br>
           <small>{{ e.event_date }} | {{ e.location }}</small><br>
           <span>{{ e.description }}</span><br>
+          <span class="badge bg-primary">Volunteers: {{ e.volunteer_count }}</span><br>
 
           {% if e.skills %}
             <span class="badge bg-info">Skills: {{ e.skills | join(", ") }}</span><br>

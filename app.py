@@ -352,9 +352,12 @@ def events():
         cursor.execute("SELECT role FROM user WHERE user_id = ?", (session['user_id'],))
         role = cursor.fetchone()['role']
 
-        # Fetch all events with org info
+        # Fetch all events with org info + volunteer count
         cursor.execute("""
-            SELECT e.*, o.name AS name, u.user_id
+            SELECT e.*, o.name AS name, u.user_id,
+                   (SELECT COUNT(*) 
+                    FROM volunteer_event ve 
+                    WHERE ve.event_id = e.event_id) AS volunteer_count
             FROM event e
             JOIN organisation o ON e.organisation_id = o.organisation_id
             JOIN user u ON o.user_id = u.user_id
@@ -363,7 +366,6 @@ def events():
 
         event_data = []
         for e in events:
-            # Get required skills for event
             cursor.execute("""
                 SELECT s.skill_id, s.name
                 FROM event_skill es
@@ -375,22 +377,22 @@ def events():
             event_data.append({
                 **dict(e),
                 "skills": [s['name'] for s in skills],
-                "skill_ids": [int(s['skill_id']) for s in skills]  # force int
+                "skill_ids": [int(s['skill_id']) for s in skills]
             })
 
-        # Volunteer’s skills
         volunteer_skills = []
         if role == "volunteer":
             cursor.execute("SELECT volunteer_id FROM volunteer WHERE user_id = ?", (session['user_id'],))
             volunteer = cursor.fetchone()
             if volunteer:
                 cursor.execute("SELECT skill_id FROM volunteer_skill WHERE volunteer_id = ?", (volunteer['volunteer_id'],))
-                volunteer_skills = [int(row['skill_id']) for row in cursor.fetchall()]  # force int
+                volunteer_skills = [int(row['skill_id']) for row in cursor.fetchall()]
 
-    return render_template("events.html", 
-                           events=event_data, 
-                           role=role, 
+    return render_template("events.html",
+                           events=event_data,
+                           role=role,
                            volunteer_skills=volunteer_skills)
+
 
 
 
@@ -481,9 +483,12 @@ def manage_event(event_id):
             flash("You cannot manage this event.", "danger")
             return redirect(url_for('events'))
 
-        # Get requests
+        # Volunteer requests (pending/accepted/declined)
         cursor.execute("""
-            SELECT er.request_id, er.status, v.first_name, v.last_name, u.email
+            SELECT er.request_id, er.status,
+                   v.first_name || ' ' || v.last_name AS full_name,
+                   CAST((julianday('now') - julianday(v.dob)) / 365 AS INT) AS age,
+                   u.email
             FROM event_request er
             JOIN volunteer v ON er.volunteer_id = v.volunteer_id
             JOIN user u ON v.user_id = u.user_id
@@ -491,8 +496,22 @@ def manage_event(event_id):
         """, (event_id,))
         requests = cursor.fetchall()
 
-    return render_template("manage_event.html", event=event, requests=requests)
+        # Volunteers who are officially in the event
+        cursor.execute("""
+            SELECT v.first_name || ' ' || v.last_name AS full_name,
+                   CAST((julianday('now') - julianday(v.dob)) / 365 AS INT) AS age,
+                   u.email
+            FROM volunteer_event ve
+            JOIN volunteer v ON ve.volunteer_id = v.volunteer_id
+            JOIN user u ON v.user_id = u.user_id
+            WHERE ve.event_id = ?
+        """, (event_id,))
+        attendees = cursor.fetchall()
 
+    return render_template("manage_event.html",
+                           event=event,
+                           requests=requests,
+                           attendees=attendees)
 
 
 
@@ -585,5 +604,5 @@ def update_skills():
 
 # Checks if script is run directly (Not imported)
 if __name__ == "__main__":
-    init_db() # Initialise databse
+    init_db() # Initialise database
     app.run(debug=True) # Runs the Flask application with debug mode enabled

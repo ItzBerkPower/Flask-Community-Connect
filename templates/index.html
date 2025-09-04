@@ -4,18 +4,33 @@
 {% block content %}
 <div class="bubble-container">
     <div class="bubble text-center">
-        <h1 class="mb-4">Welcome to Community Connect</h1>
+        <h1 class="mb-4">Welcome to <span class="text-primary">Community Connect</span></h1>
         <p class="lead">
-            Our mission is to streamline the connection between volunteers and organisations.  
-            Whether you are an individual looking to contribute your skills, or an organisation searching for passionate volunteers,  
-            Community Connect is here to make collaboration effortless.  
+            Community Connect is more than just a platform — it’s a movement.  
+            We bring together passionate volunteers and organisations who are driven by one common goal:  
+            <strong>making a positive difference in our communities.</strong>
         </p>
-        <p>
-            Browse upcoming events, register your organisation, or build your volunteer profile today.  
+
+        <hr class="my-4">
+
+        <p class="fs-5">
+            ✨ <strong>For Volunteers:</strong> Discover meaningful opportunities where your skills and time can make the biggest impact.  
+            <br>
+            🌱 <strong>For Organisations:</strong> Find dedicated individuals who are ready to contribute to your mission and help you grow.  
         </p>
+
+        <p class="mt-3">
+            Whether you’re looking to <em>give back</em>, <em>learn new skills</em>, or <em>expand your network</em>,  
+            Community Connect makes it simple, transparent, and rewarding to get involved.  
+        </p>
+
         <div class="mt-4">
-            <a href="{{ url_for('register') }}" class="btn btn-custom me-2">Join Now</a>
-            <a href="{{ url_for('login') }}" class="btn btn-custom">Login</a>
+            <a href="{{ url_for('events') }}" class="btn btn-primary btn-lg me-2">Explore Events</a>
+            {% if session.get('role') == 'organisation' %}
+                <a href="{{ url_for('all_volunteers') }}" class="btn btn-success btn-lg">Browse Volunteers</a>
+            {% elif session.get('role') == 'volunteer' %}
+                <a href="{{ url_for('all_organisations') }}" class="btn btn-success btn-lg">Browse Organisations</a>
+            {% endif %}
         </div>
     </div>
 </div>
