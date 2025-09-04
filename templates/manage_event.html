@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+{% block title %}Manage Event | Community Connect{% endblock %}
+
+{% block content %}
+<div class="bubble-container">
+    <div class="bubble">
+        <h2 class="text-center mb-4">Manage Event: {{ event.name }}</h2>
+
+        <h4>Volunteer Requests</h4>
+        <ul class="list-group">
+            {% for r in requests %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        {{ r.first_name }} {{ r.last_name }} ({{ r.email }})
+                        <span class="badge bg-secondary">{{ r.status|capitalize }}</span>
+                    </div>
+                    {% if r.status == "pending" %}
+                        <div>
+                            <form method="POST" action="{{ url_for('handle_request', request_id=r.request_id, action='accept') }}" style="display:inline;">
+                                <button type="submit" class="btn btn-success btn-sm">Accept</button>
+                            </form>
+                            <form method="POST" action="{{ url_for('handle_request', request_id=r.request_id, action='decline') }}" style="display:inline;">
+                                <button type="submit" class="btn btn-danger btn-sm">Decline</button>
+                            </form>
+                        </div>
+                    {% endif %}
+                </li>
+            {% else %}
+                <li class="list-group-item">No volunteer requests yet.</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endblock %}

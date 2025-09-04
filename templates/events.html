@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="bubble-container">
-  <div class="bubble">
+  <div class="bubble" style="min-height: 500px;">
     <h2 class="text-center mb-4">All Events</h2>
 
     {% if role == "organisation" %}
@@ -18,14 +18,34 @@
           <strong>{{ e.title }}</strong> (by {{ e.name }})<br>
           <small>{{ e.event_date }} | {{ e.location }}</small><br>
           <span>{{ e.description }}</span><br>
-          {% if e.skills %}
-            <span class="badge bg-info">Skills: {{ e.skills }}</span>
-            {% endif %}
 
-          {% if session.get('role') == 'organisation' and session.get('user_id') == e.user_id %}
-          <form method="POST" action="{{ url_for('delete_event', event_id=e.event_id) }}" style="margin:0;">
-              <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-          </form>
+          {% if e.skills %}
+            <span class="badge bg-info">Skills: {{ e.skills | join(", ") }}</span><br>
+          {% endif %}
+
+          <!-- Volunteer Join Button -->
+          {% if role == "volunteer" %}
+            {% set matching_skills = e.skill_ids | select('in', volunteer_skills) | list %}
+            {% if matching_skills %}
+              <form method="POST" action="{{ url_for('join_event', event_id=e.event_id) }}" style="display:inline;">
+                <button type="submit" class="btn btn-primary btn-sm mt-2">Join Event</button>
+              </form>
+            {% endif %}
+          {% endif %}
+
+          <!-- Organisation Controls -->
+          {% if role == "organisation" and session.get('user_id') == e.user_id %}
+            <div class="mt-2">
+              <!-- Delete button -->
+              <form method="POST" action="{{ url_for('delete_event', event_id=e.event_id) }}" style="display:inline;">
+                <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+              </form>
+              
+              <!-- Manage volunteers button -->
+              <a href="{{ url_for('manage_event', event_id=e.event_id) }}" class="btn btn-info btn-sm">
+                Manage Event
+              </a>
+            </div>
           {% endif %}
         </li>
       {% else %}

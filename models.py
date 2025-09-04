@@ -42,6 +42,7 @@ def init_db():
             user_id INTEGER NOT NULL,
             first_name TEXT NOT NULL,
             last_name TEXT NOT NULL,
+            dob DATE NOT NULL,
             availability TEXT,
             FOREIGN KEY (user_id) REFERENCES user(user_id) ON DELETE CASCADE
         );
@@ -117,6 +118,18 @@ def init_db():
             FOREIGN KEY (skill_id) REFERENCES skill(skill_id) ON DELETE CASCADE
         );
         ''')
+
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS event_request (
+            request_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            volunteer_id INTEGER NOT NULL,
+            event_id INTEGER NOT NULL,
+            status TEXT DEFAULT 'pending', -- pending / accepted / declined
+            FOREIGN KEY (volunteer_id) REFERENCES volunteer(volunteer_id) ON DELETE CASCADE,
+            FOREIGN KEY (event_id) REFERENCES event(event_id) ON DELETE CASCADE,
+            UNIQUE(volunteer_id, event_id) -- prevent duplicate requests
+        );''')
+
 
     # Add skills into skill table, 'INSERT OR IGNORE' is like 'CREATE IF NOT EXISTS'
     cursor.executemany('''

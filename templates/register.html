@@ -28,10 +28,14 @@
             <!-- Volunteer fields -->
             <div id="volunteer-fields" style="display:none;">
                 <div class="mb-3">
-                    <input type="text" class="form-control" name="first_name" placeholder="First Name">
+                    <input type="text" class="form-control" name="first_name" placeholder="First Name" required>
                 </div>
                 <div class="mb-3">
-                    <input type="text" class="form-control" name="last_name" placeholder="Last Name">
+                    <input type="text" class="form-control" name="last_name" placeholder="Last Name" required>
+                </div>
+                <div class="mb-3">
+                    <label for="dob" class="form-label">Date of Birth</label>
+                    <input type="date" class="form-control" name="dob" required>
                 </div>
             </div>
 
@@ -56,8 +60,16 @@
 <script>
 function toggleFields() {
     const role = document.getElementById("role").value;
-    document.getElementById("volunteer-fields").style.display = (role === "volunteer") ? "block" : "none";
-    document.getElementById("organisation-fields").style.display = (role === "organisation") ? "block" : "none";
+    const volunteerFields = document.getElementById("volunteer-fields");
+    const orgFields = document.getElementById("organisation-fields");
+
+    volunteerFields.style.display = (role === "volunteer") ? "block" : "none";
+    orgFields.style.display = (role === "organisation") ? "block" : "none";
+
+    // Enable/disable required dynamically
+    volunteerFields.querySelectorAll("input").forEach(i => i.required = (role === "volunteer"));
+    orgFields.querySelectorAll("input, textarea").forEach(i => i.required = (role === "organisation"));
 }
 </script>
+
 {% endblock %}

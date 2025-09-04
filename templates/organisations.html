@@ -8,18 +8,41 @@ body {
     min-height: 100vh;
 }
 </style>
+
 <div class="bubble-container">
     <div class="bubble">
         <h2 class="text-center mb-4">All Organisations</h2>
+
+        {% if session.get('role') == "volunteer" %}
+        <!-- Filter options (volunteers only) -->
+        <form method="GET" class="mb-3 d-flex justify-content-between align-items-center">
+            <div>
+                <label class="form-label me-2">Filter:</label>
+                <select class="form-select d-inline-block w-auto" name="filter">
+                    <option value="all" {% if filter == "all" %}selected{% endif %}>All Organisations</option>
+                    <option value="skills" {% if filter == "skills" %}selected{% endif %}>Matching My Skills</option>
+                </select>
+                <button type="submit" class="btn btn-sm btn-primary ms-2">Apply</button>
+            </div>
+        </form>
+        {% endif %}
+
         <ul class="list-group">
             {% for o in organisations %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
+                <li class="list-group-item">
                     <div>
-                        <strong>{{ o.username }}</strong>  
-                        <br><small>{{ o.email }}</small>
+                        <strong>{{ o.name }}</strong><br>
+                        <small>{{ o.email }}</small><br>
+                        {% if o.description %}
+                            <span class="text-muted">{{ o.description }}</span><br>
+                        {% endif %}
+                        {% if o.skills %}
+                            <span class="badge bg-info">Looking for: {{ o.skills|join(", ") }}</span>
+                        {% endif %}
                     </div>
-                    <span class="badge bg-primary">{{ o.role|capitalize }}</span>
                 </li>
+            {% else %}
+                <li class="list-group-item">No organisations found.</li>
             {% endfor %}
         </ul>
     </div>
