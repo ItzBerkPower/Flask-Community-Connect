@@ -12,6 +12,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import re
+from sqlite3 import IntegrityError
 
 from models import *
 
@@ -23,48 +24,68 @@ def index():
     return render_template('index.html') # Render the homepage template
 
 
-# Route to register the user
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    if request.method == 'POST':
+        role = request.form.get('role')
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password')
 
-    # Send request to get information required to insert user
-    if request.method == 'POST': 
-        email = request.form['email']
-        password = generate_password_hash(request.form['password'])
-        role = request.form['role']
+        if not email or not password:
+            flash("Email and password are required.", "danger")
+            return redirect(url_for('register'))
 
-        # Initialise cursor
-        conn = get_db()
-        cursor = conn.cursor()
+        with get_db() as conn:
+            cursor = conn.cursor()
+            try:
+                # Insert into user table
+                cursor.execute(
+                    "INSERT INTO user (email, password_hash, role) VALUES (?, ?, ?)",
+                    (email, generate_password_hash(password), role)
+                )
+                user_id = cursor.lastrowid
 
-        # Insert into user table
-        cursor.execute("INSERT INTO user (email, password_hash, role) VALUES (?, ?, ?)", (email, password, role))
-        user_id = cursor.lastrowid
+                if role == "volunteer":
+                    first_name = request.form.get('first_name')
+                    last_name = request.form.get('last_name')
+                    dob = request.form.get('dob')
 
-        # If it is a volunteer acount, also get first & last name of volunteer
-        if role == "volunteer":
-            first_name = request.form['first_name']
-            last_name = request.form['last_name']
-            dob = request.form['dob'] # Already in YYYY-MM-DD format
-            
-            # Did separate insert, as can still insert into same role using the user_id (Autoincrement)
-            cursor.execute("INSERT INTO volunteer (user_id, first_name, last_name, dob) VALUES (?, ?, ?, ?)", (user_id, first_name, last_name, dob))
+                    if not first_name or not last_name or not dob:
+                        raise ValueError("All volunteer fields are required.")
 
-        # If it is an organisation account, also get other required fields
-        elif role == "organisation":
-            org_name = request.form['organisation_name']
-            org_desc = request.form['organisation_description']
-            org_addr = request.form['organisation_address']
-            cursor.execute("INSERT INTO organisation (user_id, name, description, address) VALUES (?, ?, ?, ?)", (user_id, org_name, org_desc, org_addr))
+                    cursor.execute(
+                        "INSERT INTO volunteer (user_id, first_name, last_name, dob) VALUES (?, ?, ?, ?)",
+                        (user_id, first_name, last_name, dob)
+                    )
 
-        # Commit changes and update
-        conn.commit()
-        conn.close()
-        flash('Registration successful! Please log in.', 'success')
+                elif role == "organisation":
+                    org_name = request.form.get('organisation_name')
+                    description = request.form.get('organisation_description', '')
+                    address = request.form.get('organisation_address', '')
 
-        return redirect(url_for('login')) # Redirect user back to login page after registering
+                    if not org_name:
+                        raise ValueError("Organisation name is required.")
 
-    return render_template('register.html') # Render the register website page
+                    cursor.execute(
+                        "INSERT INTO organisation (user_id, name, description, address) VALUES (?, ?, ?, ?)",
+                        (user_id, org_name, description, address)
+                    )
+
+                conn.commit()
+                flash("Account created successfully! Please log in.", "success")
+                return redirect(url_for('login'))
+
+            except IntegrityError:
+                conn.rollback()
+                flash("That e-mail is already associated with an account.", "danger")
+                return redirect(url_for('register'))
+
+            except ValueError as ve:
+                conn.rollback()
+                flash(str(ve), "danger")
+                return redirect(url_for('register'))
+
+    return render_template("register.html")
 
         
 
@@ -111,7 +132,7 @@ def logout():
 @app.route("/volunteers")
 def all_volunteers():
     if session.get("role") != "organisation":
-        flash("Access denied.") 
+        flash("Access denied.", "danger")
         return redirect(url_for("index"))
 
     skill_filter = request.args.get("skill_id")
@@ -119,10 +140,11 @@ def all_volunteers():
     conn = get_db()
     cursor = conn.cursor()
 
-    # If skill filter applied, join with volunteer_skill
     if skill_filter:
         cursor.execute('''
-            SELECT v.*, u.email
+            SELECT v.first_name, v.last_name,
+                   CAST((julianday('now') - julianday(v.dob)) / 365 AS INT) AS age,
+                   u.email
             FROM volunteer v
             JOIN user u ON v.user_id = u.user_id
             JOIN volunteer_skill vs ON v.volunteer_id = vs.volunteer_id
@@ -130,7 +152,9 @@ def all_volunteers():
         ''', (skill_filter,))
     else:
         cursor.execute('''
-            SELECT v.*, u.email
+            SELECT v.first_name, v.last_name,
+                   CAST((julianday('now') - julianday(v.dob)) / 365 AS INT) AS age,
+                   u.email
             FROM volunteer v
             JOIN user u ON v.user_id = u.user_id
         ''')
@@ -143,6 +167,7 @@ def all_volunteers():
     conn.close()
 
     return render_template("volunteers.html", volunteers=volunteers, skills=skills)
+
 
 
 @app.route('/organisations')
@@ -352,20 +377,22 @@ def events():
         cursor.execute("SELECT role FROM user WHERE user_id = ?", (session['user_id'],))
         role = cursor.fetchone()['role']
 
-        # Fetch all events with org info + volunteer count
+        # Fetch events with volunteer count (aggregate + GROUP BY)
         cursor.execute("""
-            SELECT e.*, o.name AS name, u.user_id,
-                   (SELECT COUNT(*) 
-                    FROM volunteer_event ve 
-                    WHERE ve.event_id = e.event_id) AS volunteer_count
+            SELECT e.event_id, e.title, e.description, e.event_date, e.location,
+                   o.name AS name, u.user_id,
+                   COUNT(ve.volunteer_id) AS volunteer_count
             FROM event e
             JOIN organisation o ON e.organisation_id = o.organisation_id
             JOIN user u ON o.user_id = u.user_id
+            LEFT JOIN volunteer_event ve ON e.event_id = ve.event_id
+            GROUP BY e.event_id
         """)
         events = cursor.fetchall()
 
         event_data = []
         for e in events:
+            # Get required skills for this event
             cursor.execute("""
                 SELECT s.skill_id, s.name
                 FROM event_skill es
@@ -380,6 +407,7 @@ def events():
                 "skill_ids": [int(s['skill_id']) for s in skills]
             })
 
+        # Volunteer’s skills
         volunteer_skills = []
         if role == "volunteer":
             cursor.execute("SELECT volunteer_id FROM volunteer WHERE user_id = ?", (session['user_id'],))
@@ -392,7 +420,6 @@ def events():
                            events=event_data,
                            role=role,
                            volunteer_skills=volunteer_skills)
-
 
 
 
@@ -508,10 +535,22 @@ def manage_event(event_id):
         """, (event_id,))
         attendees = cursor.fetchall()
 
+        # Aggregate function: average age of attendees
+        cursor.execute("""
+            SELECT ROUND(AVG((julianday('now') - julianday(v.dob)) / 365), 1) AS avg_age
+            FROM volunteer_event ve
+            JOIN volunteer v ON ve.volunteer_id = v.volunteer_id
+            WHERE ve.event_id = ?
+        """, (event_id,))
+        avg_age_row = cursor.fetchone()
+        avg_age = avg_age_row['avg_age'] if avg_age_row and avg_age_row['avg_age'] else None
+
     return render_template("manage_event.html",
                            event=event,
                            requests=requests,
-                           attendees=attendees)
+                           attendees=attendees,
+                           avg_age=avg_age)
+
 
 
 

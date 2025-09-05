@@ -39,6 +39,16 @@
           </li>
         {% endfor %}
       </ul>
+
+      <!-- ✅ Show average age -->
+      <p class="mt-3">
+        <strong>Average Age of Volunteers:</strong>
+        {% if avg_age %}
+          {{ avg_age }} years
+        {% else %}
+          N/A
+        {% endif %}
+      </p>
     {% else %}
       <p>No volunteers have joined this event yet.</p>
     {% endif %}

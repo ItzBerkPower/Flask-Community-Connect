@@ -42,7 +42,7 @@
             <!-- Organisation fields -->
             <div id="organisation-fields" style="display:none;">
                 <div class="mb-3">
-                    <input type="text" class="form-control" name="organisation_name" placeholder="Organisation Name">
+                    <input type="text" class="form-control" name="organisation_name" placeholder="Organisation Name" required>
                 </div>
                 <div class="mb-3">
                     <textarea class="form-control" name="organisation_description" placeholder="Organisation Description"></textarea>
@@ -63,13 +63,13 @@ function toggleFields() {
     const volunteerFields = document.getElementById("volunteer-fields");
     const orgFields = document.getElementById("organisation-fields");
 
+    // Show/hide sections
     volunteerFields.style.display = (role === "volunteer") ? "block" : "none";
     orgFields.style.display = (role === "organisation") ? "block" : "none";
 
-    // Enable/disable required dynamically
+    // Dynamically set required attribute
     volunteerFields.querySelectorAll("input").forEach(i => i.required = (role === "volunteer"));
-    orgFields.querySelectorAll("input, textarea").forEach(i => i.required = (role === "organisation"));
+    orgFields.querySelectorAll("input, textarea").forEach(i => i.required = (role === "organisation" && i.name === "organisation_name"));
 }
 </script>
-
 {% endblock %}
