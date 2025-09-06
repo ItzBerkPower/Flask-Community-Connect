@@ -107,7 +107,7 @@ def login():
         with get_db() as conn:
             cursor = conn.cursor()
 
-            cursor.execute('SELECT * FROM user WHERE email = ?', (email,)) # Gather all details of that user with that email address
+            cursor.execute('SELECT user_id, role, password_hash FROM user WHERE email = ?', (email,)) # Get the user_id, user's role and their password
             user = cursor.fetchone() # Fetch the next available row
 
         # If the user row is correct, and the password is correct, update the session to log user in
