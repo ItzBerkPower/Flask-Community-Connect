@@ -16,6 +16,7 @@ from models import *
 def index():
     return render_template('index.html') # Render the homepage template
 
+
 # Route to register the user
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -91,8 +92,6 @@ def register():
 
     return render_template("register.html") # Render the actual HTML page
 
-        
-
 
 # Route for user to log in
 @app.route('/login', methods = ['GET', 'POST'])
@@ -112,6 +111,7 @@ def login():
 
         # If the user row is correct, and the password is correct, update the session to log user in
         if user and check_password_hash(user['password_hash'], password):
+            # Update session
             session['loggedin'] = True
             session['user_id'] = user['user_id']
             session["role"] = user["role"]
@@ -137,177 +137,217 @@ def logout():
 # Route to show all volunteers (Only accessible to organisations)
 @app.route("/volunteers")
 def all_volunteers():
+    # If user is not an organisation account, then can't see volunteers page
     if session.get("role") != "organisation":
-        flash("Access denied.", "danger")
-        return redirect(url_for("index"))
+        flash("Access denied.", "danger") # Throw error message
+        return redirect(url_for("index")) # Redirect user back to home page
 
+    # For filtering skills, reads filters passed in URL, e.g. '/volunteers?skill_id=3'
+    # If no skill filter, skill_filter = None
     skill_filter = request.args.get("skill_id")
 
-    conn = get_db()
-    cursor = conn.cursor()
-
-    if skill_filter:
-        cursor.execute('''
-            SELECT v.first_name, v.last_name,
-                   CAST((julianday('now') - julianday(v.dob)) / 365 AS INT) AS age,
-                   u.email
-            FROM volunteer v
-            JOIN user u ON v.user_id = u.user_id
-            JOIN volunteer_skill vs ON v.volunteer_id = vs.volunteer_id
-            WHERE vs.skill_id = ?
-        ''', (skill_filter,))
-    else:
-        cursor.execute('''
-            SELECT v.first_name, v.last_name,
-                   CAST((julianday('now') - julianday(v.dob)) / 365 AS INT) AS age,
-                   u.email
-            FROM volunteer v
-            JOIN user u ON v.user_id = u.user_id
-        ''')
-    volunteers = cursor.fetchall()
-
-    # Fetch skills for dropdown
-    cursor.execute("SELECT * FROM skill")
-    skills = cursor.fetchall()
-
-    conn.close()
-
-    return render_template("volunteers.html", volunteers=volunteers, skills=skills)
-
-
-
-@app.route('/organisations')
-def all_organisations():
-    filter_type = request.args.get('filter')
-
+    # Pythonic way of initialising cursor object (For running queries)
     with get_db() as conn:
         cursor = conn.cursor()
 
-        if filter_type == 'skills' and session.get('role') == 'volunteer':
-            # Get volunteer_id
-            cursor.execute("SELECT volunteer_id FROM volunteer WHERE user_id = ?", (session['user_id'],))
-            v = cursor.fetchone()
+        # If a skill filter is applied, only want to show volunteers with that skill
+        if skill_filter:
+            # Only show volunteers that have that skill
+            # Also calculates age directly in SQL
+            cursor.execute('''
+                SELECT v.first_name, v.last_name, CAST((julianday('now') - julianday(v.dob)) / 365 AS INT) AS age, u.email
+                FROM volunteer v
+                INNER JOIN user u ON v.user_id = u.user_id
+                INNER JOIN volunteer_skill vs ON v.volunteer_id = vs.volunteer_id
+                WHERE vs.skill_id = ?''', (skill_filter,))
+
+
+        # If no skill filter applied, show all volunteers with that skill (Default view)
+        # Also calculates age directly in SQL
+        else:
+            cursor.execute('''
+                SELECT v.first_name, v.last_name, CAST((julianday('now') - julianday(v.dob)) / 365 AS INT) AS age, u.email
+                FROM volunteer v
+                INNER JOIN user u ON v.user_id = u.user_id
+            ''')
+
+        volunteers = cursor.fetchall() # Fetch all rows from query, return them as a list of dictionaries
+
+    # Fetch the actual skills for the drop down menu
+    cursor.execute("SELECT * FROM skill")
+    skills = cursor.fetchall() # Fetch all rows from query, return them as a list of dictionaries
+
+
+    return render_template("volunteers.html", volunteers=volunteers, skills=skills) # Render the actual volunteers page
+
+
+# Route to view organisations
+@app.route('/organisations')
+def all_organisations():
+
+    # If user is not an volunteer account, then can't see organisations page
+    if session.get("role") != "volunteer":
+        flash("Access denied.", "danger") # Throw error message
+        return redirect(url_for("index")) # Redirect user back to home page
+
+    # For filtering skills, reads filters passed in URL
+    # If no skill filter, skill_filter = None
+    filter_type = request.args.get('filter')
+
+    # Pythonic way of initialising cursor object
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # If filter set to 'Matching MySkills', need to first get the users skills, then show only orgs who look for those skills
+        if filter_type == 'skills':
+            cursor.execute("SELECT volunteer_id FROM volunteer WHERE user_id = ?", (session['user_id'],)) # Get the id of the volunteer
+            v = cursor.fetchone() # Fetch next available row
+
+            # If user does exist,
             if v:
-                volunteer_id = v['volunteer_id']
+                volunteer_id = v['volunteer_id'] # Save volunteer to variable
 
                 # Get volunteer skills
-                cursor.execute("""
-                    SELECT skill_id FROM volunteer_skill WHERE volunteer_id = ?
-                """, (volunteer_id,))
-                skill_ids = [row['skill_id'] for row in cursor.fetchall()]
+                cursor.execute("SELECT skill_id FROM volunteer_skill WHERE volunteer_id = ?", (volunteer_id,)) # Get all the id's of the skills the volunteer possesses
+                skill_ids = [row['skill_id'] for row in cursor.fetchall()] # Save all of the skill_ids to a list using list comprehension
 
+                # If there are any skills the user has
                 if skill_ids:
-                    # Organisations that have events requiring these skills
-                    placeholders = ",".join("?" * len(skill_ids))
+                    placeholders = ",".join("?" * len(skill_ids)) # Placeholders for skills, as don't know how many skills user has (Is also a secret safety against SQL injection)
+
+                    # Find alll organisations that have events that require the skills the volunteer has (At least one overlap)
                     cursor.execute(f"""
                         SELECT DISTINCT o.organisation_id, o.name, o.description, o.address
                         FROM organisation o
-                        JOIN event e ON o.organisation_id = e.organisation_id
-                        JOIN event_skill es ON e.event_id = es.event_id
-                        WHERE es.skill_id IN ({placeholders})
-                    """, skill_ids)
-                    organisations = cursor.fetchall()
+                        INNER JOIN event e ON o.organisation_id = e.organisation_id
+                        INNER JOIN event_skill es ON e.event_id = es.event_id
+                        WHERE es.skill_id IN ({placeholders})""", skill_ids)
+
+                    organisations = cursor.fetchall() # Retrieve all matching organisations into list of dictionaries
+                
+                # If volunteer has no skills, no organisations to match, so return empty list for HTML template message
                 else:
                     organisations = []
+            
+            # If no volunteer record for user, also return empty list for HTML template message, as no user to have skills?
             else:
                 organisations = []
+
+        # Default case if no filter, where just show all organisations
         else:
-            # Default: get all organisations
-            cursor.execute("SELECT * FROM organisation")
-            organisations = cursor.fetchall()
+            cursor.execute("SELECT * FROM organisation") # Simple SQL command
+            organisations = cursor.fetchall() # Fetch all organisations into list of dictionaries
 
-    return render_template("organisations.html", organisations=organisations, role=session.get('role'))
+    # Render template for organisations HTML page
+    return render_template("organisations.html", organisations=organisations, role=session.get('role'), filter = filter_type)
+    # 'filter = filter_type' to make sure dropdown menu text shows current mode of filter TOOK SO LONG TO FIX
 
 
-
-
+# Route for the account details editing of the user
 @app.route('/my_account', methods=['GET', 'POST'])
 def my_account():
-    if 'user_id' not in session:
-        flash("Please log in first.", "warning")
-        return redirect(url_for('login'))
 
+    # If user tries to access page before logging in, restrict it
+    if 'user_id' not in session:
+        flash("Please log in first.", "warning") # Throw error message
+        return redirect(url_for('login')) # Redirect user back to the login page
+
+    # Pythonic way of initialising cursor object
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Get user details
+        # Gather all of the user details (That corresponds to that user id)
         cursor.execute("SELECT * FROM user WHERE user_id = ?", (session['user_id'],))
-        user = cursor.fetchone()
+        user = cursor.fetchone() # Fetch next available row
 
+        # Initialise variables
         volunteer = organisation = None
         volunteer_skills = []
         all_skills = []
 
+        # Gather all generic details for general user
         if request.method == "POST":
-            # Shared fields
+            # Email, Phone number, Password
             email = request.form.get('email')
             phone_number = request.form.get('phone_number')
             password = request.form.get('password')
 
             # Update password only if provided
             if password:
-                from werkzeug.security import generate_password_hash
-                password_hash = generate_password_hash(password)
+                password_hash = generate_password_hash(password) # Generate new password hash for password (Encryption)
+                # Update all details of user
+                # If email or phone number not changed or changed, update either way (Easiest way to do it)
                 cursor.execute("""
                     UPDATE user 
                     SET email = ?, phone_number = ?, password_hash = ? 
-                    WHERE user_id = ?
-                """, (email, phone_number, password_hash, user['user_id']))
+                    WHERE user_id = ?""", (email, phone_number, password_hash, user['user_id']))
+            
+            # If updated password not provided, only update the other fields
             else:
+                # Update email and phone number even if not changed (Easiest way to do it)
                 cursor.execute("""
                     UPDATE user 
                     SET email = ?, phone_number = ? 
-                    WHERE user_id = ?
-                """, (email, phone_number, user['user_id']))
+                    WHERE user_id = ?""", (email, phone_number, user['user_id']))
+
 
             # Role-specific updates
+            # If user is a volunteer, update the fields specific to the user
             if user['role'] == 'volunteer':
+                # First name, Last name, and their availability (Not really used)
                 first_name = request.form.get('first_name')
                 last_name = request.form.get('last_name')
                 availability = request.form.get('availability')
+
+                # Update the fields even if not changed (Easiest way to do it)
                 cursor.execute("""
                     UPDATE volunteer 
                     SET first_name = ?, last_name = ?, availability = ?
-                    WHERE user_id = ?
-                """, (first_name, last_name, availability, user['user_id']))
+                    WHERE user_id = ?""", (first_name, last_name, availability, user['user_id']))
 
+            # If user is an organisation, update the fields specific to the organisation
             elif user['role'] == 'organisation':
+                # Organisation name, Physical address, Website URL, Description of organisation
                 name = request.form.get('organisation_name')
                 address = request.form.get('organisation_address')
                 website = request.form.get('organisation_website')
                 description = request.form.get('organisation_description')
+
+                # Update the fields even if not changed (Easiest way to do it)
                 cursor.execute("""
                     UPDATE organisation 
                     SET name = ?, address = ?, website_url = ?, description = ?
                     WHERE user_id = ?
                 """, (name, address, website, description, user['user_id']))
 
-            conn.commit()
-            flash("Account updated successfully!", "success")
-            return redirect(url_for('my_account'))
+            conn.commit() # Commit changes
+            flash("Account updated successfully!", "success") # Throw the success message
+            return redirect(url_for('my_account')) # Reload the page to save changes
 
-        # GET request or after update: fetch role-specific info
+        # Updating skills of volunteer
         if user['role'] == 'volunteer':
-            cursor.execute("SELECT * FROM volunteer WHERE user_id = ?", (user['user_id'],))
-            volunteer = cursor.fetchone()
+            cursor.execute("SELECT * FROM volunteer WHERE user_id = ?", (user['user_id'],)) # Gather all information of volunteer
+            volunteer = cursor.fetchone() # Fetch next available row
 
-            # All skills
+            # Gather all skills into list of dictionaries
             cursor.execute("SELECT * FROM skill")
             all_skills = cursor.fetchall()
 
-            # Volunteer’s selected skills
+            # Find volunteer’s currently selected skills
             cursor.execute("""
                 SELECT s.skill_id 
                 FROM volunteer_skill vs 
                 JOIN skill s ON vs.skill_id = s.skill_id 
-                WHERE vs.volunteer_id = ?
-            """, (volunteer['volunteer_id'],))
-            volunteer_skills = [row['skill_id'] for row in cursor.fetchall()]
+                WHERE vs.volunteer_id = ?""", (volunteer['volunteer_id'],))
+            
+            volunteer_skills = [row['skill_id'] for row in cursor.fetchall()] # Put all skill_id's of skills volunteer has through list comprehension THIS PART TOOK 40 MINUTES
 
+        # If user is an organisation, just get all their information
         elif user['role'] == 'organisation':
-            cursor.execute("SELECT * FROM organisation WHERE user_id = ?", (user['user_id'],))
-            organisation = cursor.fetchone()
-
+            cursor.execute("SELECT * FROM organisation WHERE user_id = ?", (user['user_id'],)) # Collecting all available information of organisation
+            organisation = cursor.fetchone() # Fetching next available row
+    
+    # Render actual HTML page of account update
     return render_template(
         'my_account.html',
         user=user,
@@ -324,104 +364,121 @@ def create_event():
     
     # Check if account logged in is an organisation account, because if not, cannot create events
     if 'user_id' not in session or session.get('role') != 'organisation':
-        flash("Only organisations can create events.", "danger")
+        flash("Only organisations can create events.", "danger") # Throw error message
         return redirect(url_for('events')) # Redirect back to events page
 
-    # Initialise cursor, as multiple different SQL statements, so can't use pythonic way
-    conn = get_db()
-    cursor = conn.cursor()
-
-    # Fetch all available skills for form
-    cursor.execute("SELECT * FROM skill")
-    skills = cursor.fetchall()
-
-    # Request all fields to make event
-    if request.method == "POST":
-        title = request.form['title']
-        description = request.form['description']
-        event_date = request.form['event_date']
-        location = request.form['location']
-        max_volunteers = request.form['max_volunteers']
-        selected_skills = request.form.getlist('skills') # Get the list of all the skills from the skills table
-
-        # Get organisation_id for current user
-        cursor.execute("SELECT organisation_id FROM organisation WHERE user_id = ?", (session['user_id'],))
-        org = cursor.fetchone()
-
-
-        # Insert event
-        cursor.execute('''INSERT INTO event (organisation_id, title, description, event_date, location, max_volunteers) VALUES (?, ?, ?, ?, ?, ?)''',
-                          (org['organisation_id'], title, description, event_date, location, max_volunteers))
-        event_id = cursor.lastrowid # Need event_id to insert into junction table
-
-        # Insert selected skills into junction
-        for skill_id in selected_skills[:3]:  # limit to 3 skills
-            cursor.execute("INSERT INTO event_skill (event_id, skill_id) VALUES (?, ?)", (event_id, skill_id))
-
-        # Commit database changes and close the database
-        conn.commit()
-        conn.close()
-
-        flash("Event created successfully!", "success")
-        return redirect(url_for('events')) # Redirect user back to the events page
-
-    # Close the database
-    conn.close()
-    return render_template("create_event.html", skills=skills) # Render the actual create events form
-
-
-
-@app.route('/events')
-def events():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
+    # Pythonic way of initialising cursor object
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Get user role
-        cursor.execute("SELECT role FROM user WHERE user_id = ?", (session['user_id'],))
-        role = cursor.fetchone()['role']
+        # Fetch all available skills for form
+        cursor.execute("SELECT * FROM skill")
+        skills = cursor.fetchall()
 
-        # Fetch events with volunteer count (aggregate + GROUP BY)
+        # Request all fields to make event
+        if request.method == "POST":
+            # All the fields needed to make event
+            title = request.form['title']
+            description = request.form['description']
+            event_date = request.form['event_date']
+            location = request.form['location']
+            max_volunteers = request.form['max_volunteers']
+            selected_skills = request.form.getlist('skills') # Get the list of all the skills from the skills table
+
+            # Get organisation_id for current user
+            cursor.execute("SELECT organisation_id FROM organisation WHERE user_id = ?", (session['user_id'],))
+            org = cursor.fetchone() # Fetch next availble row)
+
+            # Extra check to ensure that organisation exists
+            if not org:
+                flash("Organisation not found", "danger") # Throw error message
+                return redirect(url_for('events')) # Redirect user back to events page 
+
+            # Insert event
+            cursor.execute('''INSERT INTO event (organisation_id, title, description, event_date, location, max_volunteers) VALUES (?, ?, ?, ?, ?, ?)''',
+                            (org['organisation_id'], title, description, event_date, location, max_volunteers))
+            event_id = cursor.lastrowid # Need event_id to insert into junction table
+
+
+            # Insert selected skills into junction
+            for skill_id in selected_skills[:3]:  # limit to 3 skills for user
+                cursor.execute("INSERT INTO event_skill (event_id, skill_id) VALUES (?, ?)", (event_id, skill_id)) # Insert skills
+
+            # Commit database changes
+            conn.commit()
+            flash("Event created successfully!", "success") # Throw success message
+            return redirect(url_for('events')) # Redirect user back to the events page
+
+
+    return render_template("create_event.html", skills=skills) # Render the actual create events form
+
+
+# Route to view events
+@app.route('/events')
+def events():
+
+    # If user not logged in, do not let them view the events
+    if 'user_id' not in session:
+        flash("You need to be logged in to explore the events!", "danger") # Throw error message
+        return redirect(url_for('login')) # Redirect user to login page
+
+    # Pythonic way of initialising cursor object
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # Get role of user, to see what view to present
+        cursor.execute("SELECT role FROM user WHERE user_id = ?", (session['user_id'],))
+        role = cursor.fetchone()['role'] # Fetch the role of user only (That's all that's needed)
+
+        # Fetch events with the volunteer count (Used GROUP BY here)
         cursor.execute("""
-            SELECT e.event_id, e.title, e.description, e.event_date, e.location,
-                   o.name AS name, u.user_id,
-                   COUNT(ve.volunteer_id) AS volunteer_count
+            SELECT e.event_id, e.title, e.description, e.event_date, e.location, o.name AS name, u.user_id, COUNT(ve.volunteer_id) AS volunteer_count
             FROM event e
-            JOIN organisation o ON e.organisation_id = o.organisation_id
-            JOIN user u ON o.user_id = u.user_id
+            INNER JOIN organisation o ON e.organisation_id = o.organisation_id
+            INNER JOIN user u ON o.user_id = u.user_id
             LEFT JOIN volunteer_event ve ON e.event_id = ve.event_id
             GROUP BY e.event_id
-        """)
-        events = cursor.fetchall()
+        """) # (Needed to use a LEFT JOIN here)
 
-        event_data = []
+        events = cursor.fetchall() # Fetch all events into a list of dictionaries
+
+        event_data = [] # Initialise variable
+
+        # Loop through all events and get the required skills for each event
         for e in events:
             # Get required skills for this event
             cursor.execute("""
                 SELECT s.skill_id, s.name
                 FROM event_skill es
                 JOIN skill s ON es.skill_id = s.skill_id
-                WHERE es.event_id = ?
-            """, (e['event_id'],))
-            skills = cursor.fetchall()
+                WHERE es.event_id = ?""", (e['event_id'],))
+            skills = cursor.fetchall() # Fetch all required skills into list of dictionaries
 
+            # This event_data list will be the one showed on the actual HTML template, so put the skill name and their skill id in list
             event_data.append({
                 **dict(e),
                 "skills": [s['name'] for s in skills],
                 "skill_ids": [int(s['skill_id']) for s in skills]
             })
 
-        # Volunteer’s skills
-        volunteer_skills = []
-        if role == "volunteer":
-            cursor.execute("SELECT volunteer_id FROM volunteer WHERE user_id = ?", (session['user_id'],))
-            volunteer = cursor.fetchone()
-            if volunteer:
-                cursor.execute("SELECT skill_id FROM volunteer_skill WHERE volunteer_id = ?", (volunteer['volunteer_id'],))
-                volunteer_skills = [int(row['skill_id']) for row in cursor.fetchall()]
 
+        # Volunteer’s skills
+        volunteer_skills = [] # Initialise variable
+
+        # If the user is a volunteer,
+        if role == "volunteer":
+            
+            # Find the volunteer id from the supplied user id
+            cursor.execute("SELECT volunteer_id FROM volunteer WHERE user_id = ?", (session['user_id'],))
+            volunteer = cursor.fetchone() # Fetch next available row
+
+            # If the volunteer exists (Extra check)
+            if volunteer:
+                # Retrieve all skills associated with the volunteer
+                cursor.execute("SELECT skill_id FROM volunteer_skill WHERE volunteer_id = ?", (volunteer['volunteer_id'],))
+                volunteer_skills = [int(row['skill_id']) for row in cursor.fetchall()] # List comprehension iterates through each row, extracting skill id, and converting to integer and storing in list SO LONG TO DO
+
+    # Render the actual events HTML page
     return render_template("events.html",
                            events=event_data,
                            role=role,
@@ -435,10 +492,10 @@ def delete_event(event_id):
 
     # Check if user is organisation account, as if not, cannot delete events at all
     if 'user_id' not in session or session.get('role') != 'organisation':
-        flash('You are not allowed to do that.', 'danger')
+        flash('You are not allowed to do that.', 'danger') # Throw error message
         return redirect(url_for('events')) # Redirect user back to events page
 
-    # Initialise cursor object
+    # Pythonic way of initialising cursor object
     with get_db() as conn:
         cursor = conn.cursor()
 
@@ -450,16 +507,16 @@ def delete_event(event_id):
         if event:
             # Get organisation_id of logged in user
             cursor.execute('SELECT organisation_id FROM organisation WHERE user_id = ?', (session['user_id'],))
-            org = cursor.fetchone()
+            org = cursor.fetchone() # Fetch next available row
 
             # Check if organisation_id is same as the one recorded in the event
             # If its the same, then that organisation created the event 
             if org and org['organisation_id'] == event['organisation_id']:
                 cursor.execute('DELETE FROM event WHERE event_id = ?', (event_id,)) # Delete event
                 conn.commit() # Update changes
-                flash('Event deleted successfully.', 'success')
+                flash('Event deleted successfully.', 'success') # Throw success message
 
-            # If doesn't own event, throw an error message
+            # If organisation doesn't own event, throw an error message
             else:
                 flash('You can only delete your own events.', 'danger')
 
@@ -470,108 +527,122 @@ def delete_event(event_id):
     return redirect(url_for('events')) # Redirect user to the events page
 
 
+# Route for volunteers to join event
 @app.route('/join_event/<int:event_id>', methods=['POST'])
 def join_event(event_id):
+    # If user not logged in OR user is not a volunteer, restrict them from joining an event
     if 'user_id' not in session or session.get('role') != 'volunteer':
-        flash("Only volunteers can join events.", "danger")
-        return redirect(url_for('events'))
+        flash("Only volunteers can join events.", "danger") # Throw error message
+        return redirect(url_for('events')) # Reload the page
 
+    # Pythonic way of initialising cursor object
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Get volunteer_id
+        # Get the volunteer id from the user id
         cursor.execute("SELECT volunteer_id FROM volunteer WHERE user_id = ?", (session['user_id'],))
-        volunteer = cursor.fetchone()
+        volunteer = cursor.fetchone() # Fetch next available row
 
+        # If volunteer actually exists (Extra safety check)
         if volunteer:
-            # Check event capacity
+            # Check event capacity of the event
             cursor.execute("SELECT max_volunteers FROM event WHERE event_id = ?", (event_id,))
-            event = cursor.fetchone()
-
+            event = cursor.fetchone() # Fetch next available row
+            
+            # If event doesn't exist (Extra safety check)
             if not event:
-                flash("Event not found.", "danger")
-                return redirect(url_for('events'))
+                flash("Event not found.", "danger") # Throw error message
+                return redirect(url_for('events')) # Redirect user back to the events page
 
-            # Count currently accepted volunteers
+            # Count the currently accepted volunteers (To check if space)
             cursor.execute("""
                 SELECT COUNT(*) AS count
                 FROM volunteer_event
-                WHERE event_id = ?
-            """, (event_id,))
+                WHERE event_id = ?""", (event_id,))
             current_count = cursor.fetchone()["count"]
 
+            # If the event is full, where the current number of volunteers is same or more than the initial max number of volunteers
             if event["max_volunteers"] is not None and current_count >= event["max_volunteers"]:
-                flash("Event is already full. Explore other events!", "warning")
-                return redirect(url_for('events'))
+                flash("Event is already full. Explore other events!", "warning") # Throw error message
+                return redirect(url_for('events')) # Reload the page
 
+            # 'try' to join the event (To catch errors)
             try:
-                # Insert join request if not already there
+                # Insert into the requesting to join events table, for organisation to accept
                 cursor.execute("""
                     INSERT INTO event_request (volunteer_id, event_id, status)
-                    VALUES (?, ?, 'pending')
-                """, (volunteer['volunteer_id'], event_id))
-                conn.commit()
-                flash("Your request to join has been sent!", "success")
+                    VALUES (?, ?, 'pending')""", (volunteer['volunteer_id'], event_id))
+                
+                conn.commit() # Save all committed changes
+                flash("Your request to join has been sent!", "success") # Send success message
+
+            # If user tries to join event more than once, raise an error
             except sqlite3.IntegrityError:
-                flash("You already requested to join this event.", "warning")
+                flash("You already requested to join this event.", "warning") # Throw error message
 
-    return redirect(url_for('events'))
+    return redirect(url_for('events')) # Render the events HTML page
 
 
-
+# Route for organisations to manage their events
 @app.route('/manage_event/<int:event_id>')
 def manage_event(event_id):
-    if 'user_id' not in session or session.get('role') != 'organisation':
-        flash("Only organisations can manage events.", "danger")
-        return redirect(url_for('events'))
 
+    # If user not logged in OR user account is not an organisation account (Extra safety check)
+    if 'user_id' not in session or session.get('role') != 'organisation':
+        flash("Only organisations can manage events.", "danger") # Throw error message
+        return redirect(url_for('events')) # Reload page
+
+    # Pythonic way of initalising cursor object
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Ensure event belongs to this org
+        # Ensure event belongs to this organisation
+        # Find organisation id from the user id
         cursor.execute("SELECT organisation_id FROM organisation WHERE user_id = ?", (session['user_id'],))
-        org = cursor.fetchone()
+        org = cursor.fetchone() # Fetch next evailable row
+
+        # Find the record of that event owned by that organisation
         cursor.execute("SELECT * FROM event WHERE event_id = ? AND organisation_id = ?", (event_id, org['organisation_id']))
-        event = cursor.fetchone()
+        event = cursor.fetchone() # Fetch next available row
+
+        # If organisation doesn't own that event, will be empty variable, hence organisation doesn't own event (Extra safety check)
         if not event:
-            flash("You cannot manage this event.", "danger")
-            return redirect(url_for('events'))
+            flash("You cannot manage this event.", "danger") # Throw error message
+            return redirect(url_for('events')) # Reload the page
 
-        # Volunteer requests (pending/accepted/declined)
+        # Find the requests of the volunteers (With the concatenated names and calculated ages, as per requirements) TOOK SO LONG
         cursor.execute("""
-            SELECT er.request_id, er.status,
-                   v.first_name || ' ' || v.last_name AS full_name,
-                   CAST((julianday('now') - julianday(v.dob)) / 365 AS INT) AS age,
-                   u.email
+            SELECT er.request_id, er.status, v.first_name || ' ' || v.last_name AS full_name, CAST((julianday('now') - julianday(v.dob)) / 365 AS INT) AS age, u.email
             FROM event_request er
-            JOIN volunteer v ON er.volunteer_id = v.volunteer_id
-            JOIN user u ON v.user_id = u.user_id
-            WHERE er.event_id = ?
-        """, (event_id,))
-        requests = cursor.fetchall()
+            INNER JOIN volunteer v ON er.volunteer_id = v.volunteer_id
+            INNER JOIN user u ON v.user_id = u.user_id
+            WHERE er.event_id = ?""", (event_id,))
+        
+        requests = cursor.fetchall() # Put all requests as dictionaries in a list
 
-        # Volunteers who are officially in the event
+        # Display all volunteers who are currently involved with the event
         cursor.execute("""
-            SELECT v.first_name || ' ' || v.last_name AS full_name,
-                   CAST((julianday('now') - julianday(v.dob)) / 365 AS INT) AS age,
-                   u.email
+            SELECT v.first_name || ' ' || v.last_name AS full_name, CAST((julianday('now') - julianday(v.dob)) / 365 AS INT) AS age, u.email
             FROM volunteer_event ve
             JOIN volunteer v ON ve.volunteer_id = v.volunteer_id
             JOIN user u ON v.user_id = u.user_id
-            WHERE ve.event_id = ?
-        """, (event_id,))
-        attendees = cursor.fetchall()
+            WHERE ve.event_id = ?""", (event_id,))
+        
+        attendees = cursor.fetchall() # Put all attendees as dictionaries in a list
 
-        # Aggregate function: average age of attendees
+        # Find the average age of attendees on the bottom, as per requirements
         cursor.execute("""
             SELECT ROUND(AVG((julianday('now') - julianday(v.dob)) / 365), 1) AS avg_age
             FROM volunteer_event ve
             JOIN volunteer v ON ve.volunteer_id = v.volunteer_id
-            WHERE ve.event_id = ?
-        """, (event_id,))
-        avg_age_row = cursor.fetchone()
+            WHERE ve.event_id = ?""", (event_id,))
+        
+        avg_age_row = cursor.fetchone() # Fetch next available row
+
+        # If the average age exists, then save it into variable, if not, initialise the variable as None (For the HTML template)
         avg_age = avg_age_row['avg_age'] if avg_age_row and avg_age_row['avg_age'] else None
 
+    # Render the actual HTML page to manage the events
     return render_template("manage_event.html",
                            event=event,
                            requests=requests,
@@ -579,92 +650,101 @@ def manage_event(event_id):
                            avg_age=avg_age)
 
 
-
-
+# Route for handling requests
 @app.route('/handle_request/<int:request_id>/<string:action>', methods=['POST'])
 def handle_request(request_id, action):
-    if 'user_id' not in session or session.get('role') != 'organisation':
-        flash("Only organisations can handle requests.", "danger")
-        return redirect(url_for('events'))
 
+    # If user not logged in OR user account not organisation account, restrict from accessing 
+    if 'user_id' not in session or session.get('role') != 'organisation':
+        flash("Only organisations can handle requests.", "danger") # Throw error message
+        return redirect(url_for('events')) # Redirect user back to the events page
+
+    # Pythonic way of initialising cursor object
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Get request
+        # Retrieve the actual request from the volunteer for that event
         cursor.execute("SELECT * FROM event_request WHERE request_id = ?", (request_id,))
-        request = cursor.fetchone()
+        request = cursor.fetchone() # Fetch next available row
 
+        # If no request, then raise an error instead of crashing app (Extra safety check)
         if not request:
-            flash("Request not found.", "danger")
-            return redirect(url_for('events'))
+            flash("Request not found.", "danger") # Throw error message
+            return redirect(url_for('events')) # Redirect user back to the events page
 
+        # If organisation accepts the volunteer
         if action == "accept":
-            # Update request status
+            # Update the request status in the table
             cursor.execute("UPDATE event_request SET status = 'accepted' WHERE request_id = ?", (request_id,))
 
-            # Add to volunteer_event table
+            # Add the volunteer to the event (OR IGNORE for extra safety check if volunteer already added)
             cursor.execute("""
-                INSERT OR IGNORE INTO volunteer_event (volunteer_id, event_id)
-                VALUES (?, ?)
-            """, (request['volunteer_id'], request['event_id']))
+                INSERT OR IGNORE INTO volunteer_event (volunteer_id, event_id)VALUES (?, ?)""", 
+                (request['volunteer_id'], request['event_id']))
 
-            flash("Volunteer accepted and added to event.", "success")
+            flash("Volunteer accepted and added to event.", "success") # Throw success message
 
+        # If organisation declines volunteer
         elif action == "decline":
+            # Update the request status in the table
             cursor.execute("UPDATE event_request SET status = 'declined' WHERE request_id = ?", (request_id,))
-            flash("Volunteer request declined.", "info")
 
-        conn.commit()
+            flash("Volunteer request declined.", "info") # Throw message
 
-    return redirect(url_for('manage_event', event_id=request['event_id']))
+        conn.commit() # Update all changes
+
+    return redirect(url_for('manage_event', event_id=request['event_id'])) # Render the actual HTML page
 
 
+# Route for the user to update their skills (Connected with the 'my_account' route)
 @app.route('/update_skills', methods=['POST'])
 def update_skills():
+
+    # If user not logged in OR the user account is not a volunteer account, restrict them from trying to update skills
     if 'user_id' not in session or session.get('role') != 'volunteer':
-        flash("Only volunteers can update skills.", "danger")
-        return redirect(url_for('my_account'))
+        flash("Only volunteers can update skills.", "danger") # Throw error message
+        return redirect(url_for('my_account')) # Redirect user back to the information-updating page
 
-    user_id = session['user_id']
+    user_id = session['user_id'] # If logged in, update session
 
+    # Pythonic way of initialising cursor object
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Double-check this user is really a volunteer
+        # Double-check this user is really a volunteer, by trying to get the volunteer id from the user id
         cursor.execute("SELECT volunteer_id FROM volunteer WHERE user_id = ?", (user_id,))
-        volunteer = cursor.fetchone()
+        volunteer = cursor.fetchone() # Fetch next available row
+
+        # If not a volunteer, then throw an error before it crashes the app
         if not volunteer:
-            flash("Volunteer record not found.", "danger")
-            return redirect(url_for('my_account'))
+            flash("Volunteer record not found.", "danger") # Throw error message 
+            return redirect(url_for('my_account')) # Redirect user back to the my_account page
 
-        volunteer_id = volunteer['volunteer_id']
+        volunteer_id = volunteer['volunteer_id'] # Put the volunteer_id into a separate variable, easier to use
 
-        # Debug log
+        # Debugging purposes (DON'T LEAVE IN)
         print(f"Updating skills for volunteer_id={volunteer_id}, user_id={user_id}")
 
-        # Get submitted skills
+        # Get submitted skills from the form as a list
         selected_skills = request.form.getlist("skills")
-        print("Selected skills:", selected_skills)
+        print("Selected skills:", selected_skills) # Debugging purposes (DON'T LEAVE IN)
 
-        # Enforce max 3
+        # Enforce max 3 skils only, if more than 3, raise an error
         if len(selected_skills) > 3:
-            flash("You can only select up to 3 skills.", "warning")
-            return redirect(url_for('my_account'))
+            flash("You can only select up to 3 skills.", "warning") # Throw a warning message
+            return redirect(url_for('my_account')) # Reload the page
 
-        # Clear old
+        # If successful in selecting, delete old records of the users skills
         cursor.execute("DELETE FROM volunteer_skill WHERE volunteer_id = ?", (volunteer_id,))
 
-        # Insert new
-        for skill_id in selected_skills:
-            cursor.execute(
-                "INSERT INTO volunteer_skill (volunteer_id, skill_id) VALUES (?, ?)",
-                (volunteer_id, skill_id)
-            )
+        # Insert new records of the users skills (Technically updates them)
+        for skill_id in selected_skills: # Loop through every skill and inserts it (Ensures atomicity IM COOKING)
+            cursor.execute("INSERT INTO volunteer_skill (volunteer_id, skill_id) VALUES (?, ?)",(volunteer_id, skill_id))
 
-        conn.commit()
-        flash("Skills updated successfully.", "success")
+        conn.commit() # Commit changes
+        flash("Skills updated successfully.", "success") # Throw success message
 
-    return redirect(url_for('my_account'))
+    return redirect(url_for('my_account')) # Render actual HTML page
 
 
 
