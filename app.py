@@ -16,69 +16,80 @@ from models import *
 def index():
     return render_template('index.html') # Render the homepage template
 
-
+# Route to register the user
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    # Get the role, email and password from the general user, as is shared fields
     if request.method == 'POST':
         role = request.form.get('role')
-        email = request.form.get('email', '').strip().lower()
+        email = request.form.get('email', '').strip().lower() # Lower to keep consistent with naming
         password = request.form.get('password')
 
+        # Input validation, though flask has built-in validation
         if not email or not password:
             flash("Email and password are required.", "danger")
-            return redirect(url_for('register'))
+            return redirect(url_for('register')) # Reload to display flash
 
+        # Pythonic way of initialising cursor
         with get_db() as conn:
             cursor = conn.cursor()
-            try:
-                # Insert into user table
-                cursor.execute(
-                    "INSERT INTO user (email, password_hash, role) VALUES (?, ?, ?)",
-                    (email, generate_password_hash(password), role)
-                )
-                user_id = cursor.lastrowid
 
+            # try-except block to catch error from UNIQUE constraint for email
+            try:
+                # Insert the general details of user into the table
+                cursor.execute("INSERT INTO user (email, password_hash, role) VALUES (?, ?, ?)",
+                        (email, generate_password_hash(password), role))
+                user_id = cursor.lastrowid # Get user id, as the new user is the last user record entered
+
+
+                # If volunteer, get fields unique to the volunteer from form
                 if role == "volunteer":
+                    # First name, Last name, Date of Birth
                     first_name = request.form.get('first_name')
                     last_name = request.form.get('last_name')
                     dob = request.form.get('dob')
 
+                    # Input validation, though Flask has in-built input validation so not needed
                     if not first_name or not last_name or not dob:
                         raise ValueError("All volunteer fields are required.")
 
-                    cursor.execute(
-                        "INSERT INTO volunteer (user_id, first_name, last_name, dob) VALUES (?, ?, ?, ?)",
-                        (user_id, first_name, last_name, dob)
-                    )
+                    # Insert the final details for volunteer into same user row (Was empty initially)
+                    cursor.execute("INSERT INTO volunteer (user_id, first_name, last_name, dob) VALUES (?, ?, ?, ?)",
+                        (user_id, first_name, last_name, dob))
 
+
+                # If organisation, get fields unique to the organisation from form
                 elif role == "organisation":
+                    # Organisation name, Organisation description, Organisation Address (Physical Address)
                     org_name = request.form.get('organisation_name')
                     description = request.form.get('organisation_description', '')
                     address = request.form.get('organisation_address', '')
 
+                    # Input validation, though Flask has already got in-built input validation, but just incase
                     if not org_name:
                         raise ValueError("Organisation name is required.")
 
-                    cursor.execute(
-                        "INSERT INTO organisation (user_id, name, description, address) VALUES (?, ?, ?, ?)",
-                        (user_id, org_name, description, address)
-                    )
+                    # Insert the final details for volunteer into same organisation row (Was empty initially)
+                    cursor.execute("INSERT INTO organisation (user_id, name, description, address) VALUES (?, ?, ?, ?)",
+                        (user_id, org_name, description, address))
 
-                conn.commit()
-                flash("Account created successfully! Please log in.", "success")
-                return redirect(url_for('login'))
+                conn.commit() # Commit changes
+                flash("Account created successfully! Please log in.", "success") # Throw the success flash message
+                return redirect(url_for('login')) # Redirect user to login page
 
+            # If user tried registering with an already-used e-mail address
             except IntegrityError:
-                conn.rollback()
-                flash("That e-mail is already associated with an account.", "danger")
-                return redirect(url_for('register'))
+                conn.rollback() # Undo the uncommitted changes to last committed change
+                flash("That e-mail is already associated with an account.", "danger") # Throw error flash message
+                return redirect(url_for('register')) # Reload register page
 
+            # If the error thrown for a field not filled out (To reduce duplicated code)
             except ValueError as ve:
-                conn.rollback()
-                flash(str(ve), "danger")
-                return redirect(url_for('register'))
+                conn.rollback() # Undo the uncommitted changes to last committed changes
+                flash(str(ve), "danger") # Throw the error flash message
+                return redirect(url_for('register')) # Reload the register page
 
-    return render_template("register.html")
+    return render_template("register.html") # Render the actual HTML page
 
         
 
@@ -92,9 +103,11 @@ def login():
         password = request.form['password']
 
         # Try to find user from database
+        # Pythonic way of initialising cursor object
         with get_db() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT * FROM user WHERE email = ?', (email,))
+
+            cursor.execute('SELECT * FROM user WHERE email = ?', (email,)) # Gather all details of that user with that email address
             user = cursor.fetchone() # Fetch the next available row
 
         # If the user row is correct, and the password is correct, update the session to log user in
