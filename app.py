@@ -1,10 +1,3 @@
-# TO-DO
-# Add full list of volunteers per event, with total number of volunteers and age of volunteers
-# Can see total number of people each event per event box (Show as fraction), and show average duration of events at top
-# Fix commenting and code style
-
-
-
 # app.py
 import sqlite3
 import os
@@ -478,7 +471,28 @@ def join_event(event_id):
         volunteer = cursor.fetchone()
 
         if volunteer:
+            # Check event capacity
+            cursor.execute("SELECT max_volunteers FROM event WHERE event_id = ?", (event_id,))
+            event = cursor.fetchone()
+
+            if not event:
+                flash("Event not found.", "danger")
+                return redirect(url_for('events'))
+
+            # Count currently accepted volunteers
+            cursor.execute("""
+                SELECT COUNT(*) AS count
+                FROM volunteer_event
+                WHERE event_id = ?
+            """, (event_id,))
+            current_count = cursor.fetchone()["count"]
+
+            if event["max_volunteers"] is not None and current_count >= event["max_volunteers"]:
+                flash("Event is already full. Explore other events!", "warning")
+                return redirect(url_for('events'))
+
             try:
+                # Insert join request if not already there
                 cursor.execute("""
                     INSERT INTO event_request (volunteer_id, event_id, status)
                     VALUES (?, ?, 'pending')
