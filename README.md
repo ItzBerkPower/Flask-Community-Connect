@@ -102,5 +102,5 @@ Authentication & Access Control: Volunteers and organisations have role-specific
 - Support multiple languages and internationalisation
 - Include analytics dashboard for organisations
 
-# Licence
+## License
 This project is licensed under the MIT License. See LICENSE file for details.
