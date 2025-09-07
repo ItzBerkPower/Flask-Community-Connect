@@ -32,8 +32,7 @@ def init_db():
             phone_number TEXT,
             role TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        ''')
+        );''')
 
         # Creating the 'volunteer' table
         cursor.execute('''
@@ -45,8 +44,7 @@ def init_db():
             dob DATE NOT NULL,
             availability TEXT,
             FOREIGN KEY (user_id) REFERENCES user(user_id) ON DELETE CASCADE
-        );
-        ''')
+        );''')
 
         # Creating the 'organisation' table
         cursor.execute('''
@@ -58,8 +56,7 @@ def init_db():
             address TEXT,
             website_url TEXT,
             FOREIGN KEY (user_id) REFERENCES user(user_id) ON DELETE CASCADE
-        );
-        ''')
+        );''')
 
         # Creating the 'event' table
         cursor.execute('''
@@ -72,8 +69,7 @@ def init_db():
             location TEXT,
             max_volunteers INTEGER,
             FOREIGN KEY (organisation_id) REFERENCES organisation(organisation_id) ON DELETE CASCADE
-        );
-        ''')
+        );''')
 
         # Creating the 'skills' table
         cursor.execute('''
@@ -81,8 +77,7 @@ def init_db():
             skill_id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL UNIQUE,
             description TEXT
-        );
-        ''')
+        );''')
 
         # Creating the 'volunteer_event' junction table
         cursor.execute('''
@@ -93,8 +88,7 @@ def init_db():
             PRIMARY KEY (volunteer_id, event_id),
             FOREIGN KEY (volunteer_id) REFERENCES volunteer(volunteer_id) ON DELETE CASCADE,
             FOREIGN KEY (event_id) REFERENCES event(event_id) ON DELETE CASCADE
-        );
-        ''')
+        );''')
 
         # Creating the 'volunteer_skill' junction table
         cursor.execute('''
@@ -105,8 +99,7 @@ def init_db():
             PRIMARY KEY (volunteer_id, skill_id),
             FOREIGN KEY (volunteer_id) REFERENCES volunteer(volunteer_id) ON DELETE CASCADE,
             FOREIGN KEY (skill_id) REFERENCES skill(skill_id) ON DELETE CASCADE
-        );
-        ''')
+        );''')
 
         # Creating the 'event_skill' junction table
         cursor.execute('''
@@ -116,15 +109,15 @@ def init_db():
             PRIMARY KEY (event_id, skill_id),
             FOREIGN KEY (event_id) REFERENCES event(event_id) ON DELETE CASCADE,
             FOREIGN KEY (skill_id) REFERENCES skill(skill_id) ON DELETE CASCADE
-        );
-        ''')
+        );''')
 
+        # Creating the 'event_request' table
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS event_request (
             request_id INTEGER PRIMARY KEY AUTOINCREMENT,
             volunteer_id INTEGER NOT NULL,
             event_id INTEGER NOT NULL,
-            status TEXT DEFAULT 'pending', -- pending / accepted / declined
+            status TEXT DEFAULT 'pending', -- Pending / Accepted / Declined
             FOREIGN KEY (volunteer_id) REFERENCES volunteer(volunteer_id) ON DELETE CASCADE,
             FOREIGN KEY (event_id) REFERENCES event(event_id) ON DELETE CASCADE,
             UNIQUE(volunteer_id, event_id) -- prevent duplicate requests
@@ -141,5 +134,5 @@ def init_db():
         ("Public Speaking", "Confident in speaking to groups")
     ])
 
-    conn.commit()
+    conn.commit() # Commit all changes
     #conn.close(), don't need as in 'with' command, which is pythonic way of automatically closing website
